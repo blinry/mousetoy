@@ -56,7 +56,10 @@ int main() {
 
     double x, y;
 
-    query(context, 14, &x, &y);
+    int first_id = 2;
+    int second_id = 16;
+
+    query(context, second_id, &x, &y);
     // warp(context, 14, 100, 100);
     printf("%f %f\n", x, y);
 }
