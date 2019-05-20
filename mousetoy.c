@@ -4,33 +4,59 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-void warp(int deviceid, int x, int y) {
+typedef struct Context {
+    Display *display;
+    Window root_window;
+} Context;
+
+void warp(Context context, int deviceid, int x, int y) {
+
     int src_x = 0;
     int src_y = 0;
     int src_width = 0;
     int src_height = 0;
 
-    char *env_display = getenv("DISPLAY");
+    int dest_x = 100;
+    int dest_y = 100;
 
+    Window dest_w = context.root_window;
+    Window src_w = None;
+
+    int err = XIWarpPointer(context.display, deviceid, src_w, dest_w, src_x,
+                            src_y, src_width, src_height, x, dest_y);
+    XFlush(context.display);
+}
+
+void query(Context context, int deviceid, double *x, double *y) {
+    Window root = 0;
+    Window window = 0;
+
+    double double_dummy = 0;
+    XIButtonState button_state_dummy;
+    XIModifierState modifier_state_dummy;
+    XIGroupState modifier_group_dummy;
+
+    XIQueryPointer(context.display, deviceid, context.root_window, &root,
+                   &window, x, y, &double_dummy, &double_dummy,
+                   &button_state_dummy, &modifier_state_dummy,
+                   &modifier_group_dummy);
+}
+
+int main() {
+    char *env_display = getenv("DISPLAY");
     Display *display = XOpenDisplay(env_display);
 
     int screen = 0;
 
-    Window screen_root = RootWindow(display, screen);
+    Window root_window = RootWindow(display, screen);
 
-    Window dest_w = screen_root;
-    Window src_w = None;
+    Context context;
+    context.display = display;
+    context.root_window = root_window;
 
-    int dest_x = 100;
-    int dest_y = 100;
+    double x, y;
 
-    int err = XIWarpPointer(display, deviceid, src_w, dest_w, src_x, src_y,
-                            src_width, src_height, dest_x, dest_y);
-    XFlush(display);
-}
-
-int main() {
-    int deviceid = 14;
-
-    warp(14, 100, 100);
+    query(context, 14, &x, &y);
+    // warp(context, 14, 100, 100);
+    printf("%f %f\n", x, y);
 }
