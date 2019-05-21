@@ -102,11 +102,7 @@ void loop(Context context, PhysicsEnt c1, PhysicsEnt c2) {
     }
 }
 
-int main() {
-    int first_id = 2;
-    int second_id = 14;
-    double x, y;
-
+Context build_context() {
     char *env_display = getenv("DISPLAY");
     Display *display = XOpenDisplay(env_display);
 
@@ -122,6 +118,15 @@ int main() {
     context.width = WidthOfScreen(screen);
     context.height = HeightOfScreen(screen);
 
+    return context;
+}
+
+void orbits(Context context) {
+    int first_id = 2;
+    int second_id = 14;
+
+    double x, y;
+
     query(context, first_id, &x, &y);
     PhysicsEnt c1 = {0, 0, x, y, first_id};
 
@@ -131,4 +136,73 @@ int main() {
     printf("%f %f\n", x, y);
 
     loop(context, c1, c2);
+}
+
+void fling(Context context) {
+    int first_id = 2;
+
+    double x, y;
+    query(context, first_id, &x, &y);
+
+    PhysicsEnt c1 = {0, 0, x, y, first_id};
+
+    double c = 0.1;
+
+    while (True) {
+        double newx, newy;
+        query(context, first_id, &newx, &newy);
+
+        if (abs(newx - c1.x) > 1) {
+            x = newx;
+        } else {
+            x = c1.x;
+        }
+        if (abs(newy - c1.y) > 1) {
+            y = newy;
+        } else {
+            y = c1.y;
+        }
+
+        double xdiff = x - c1.x;
+        double ydiff = y - c1.y;
+
+        double limit = 0.1;
+
+        double moved = sqrt(xdiff * xdiff + ydiff * ydiff);
+
+        // if (abs(xdiff) > abs(c1.vx)) {
+        c1.vx += c * xdiff;
+        //}
+        // if (abs(ydiff) > abs(c1.vy)) {
+        c1.vy += c * ydiff;
+        //}
+
+        printf("%f %f\n", c1.vx, c1.vy);
+
+        c1.x += c1.vx;
+        c1.y += c1.vy;
+
+        if (c1.y >= context.height || c1.y <= 0) {
+            c1.vy *= -1;
+        }
+        if (c1.x >= context.width || c1.x <= 0) {
+            c1.vx *= -1;
+        }
+
+        double f = 0.9;
+
+        c1.vx *= f;
+        c1.vy *= f;
+
+        warp(context, c1.id, c1.x, c1.y);
+
+        usleep(16000);
+    }
+}
+
+int main() {
+    Context context = build_context();
+
+    // orbits(context);
+    fling(context);
 }
