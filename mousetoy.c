@@ -17,6 +17,7 @@ typedef struct Context {
     Window root_window;
     int width;
     int height;
+    int id1, id2;
 } Context;
 
 void warp(Context context, int deviceid, double x, double y) {
@@ -102,7 +103,7 @@ void loop(Context context, PhysicsEnt c1, PhysicsEnt c2) {
     }
 }
 
-Context build_context() {
+Context build_context(int id1, int id2) {
     char *env_display = getenv("DISPLAY");
     Display *display = XOpenDisplay(env_display);
 
@@ -117,21 +118,20 @@ Context build_context() {
     context.root_window = root_window;
     context.width = WidthOfScreen(screen);
     context.height = HeightOfScreen(screen);
+    context.id1 = id1;
+    context.id2 = id2;
 
     return context;
 }
 
 void orbits(Context context) {
-    int first_id = 2;
-    int second_id = 14;
-
     double x, y;
 
-    query(context, first_id, &x, &y);
-    PhysicsEnt c1 = {0, 0, x, y, first_id};
+    query(context, context.id1, &x, &y);
+    PhysicsEnt c1 = {0, 0, x, y, context.id1};
 
-    query(context, second_id, &x, &y);
-    PhysicsEnt c2 = {0, 0, x, y, second_id};
+    query(context, context.id2, &x, &y);
+    PhysicsEnt c2 = {0, 0, x, y, context.id2};
 
     printf("%f %f\n", x, y);
 
@@ -139,18 +139,16 @@ void orbits(Context context) {
 }
 
 void fling(Context context) {
-    int first_id = 2;
-
     double x, y;
-    query(context, first_id, &x, &y);
+    query(context, context.id1, &x, &y);
 
-    PhysicsEnt c1 = {0, 0, x, y, first_id};
+    PhysicsEnt c1 = {0, 0, x, y, context.id1};
 
     double c = 0.1;
 
     while (True) {
         double newx, newy;
-        query(context, first_id, &newx, &newy);
+        query(context, context.id1, &newx, &newy);
 
         if (abs(newx - c1.x) > 1) {
             x = newx;
@@ -200,8 +198,12 @@ void fling(Context context) {
     }
 }
 
-int main() {
-    Context context = build_context();
+int main(int argc, char **argv) {
+    if(argc != 3) {
+        puts("Wrong number of inputs!");
+        return EXIT_FAILURE;
+    }
+    Context context = build_context(atoi(argv[1]), atoi(argv[2]));
 
     // orbits(context);
     fling(context);
