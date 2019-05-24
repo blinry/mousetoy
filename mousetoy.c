@@ -31,21 +31,21 @@ typedef struct PointerConfiguration {
     int num_slave_pointers;
 } PointerConfiguration;
 
-void warp(Context context, int deviceid, double x, double y) {
+void warp(Context *context, int deviceid, double x, double y) {
     double src_x = 0;
     double src_y = 0;
     int src_width = 0;
     int src_height = 0;
 
-    Window dest_w = context.root_window;
+    Window dest_w = context->root_window;
     Window src_w = None;
 
-    int err = XIWarpPointer(context.display, deviceid, src_w, dest_w, src_x,
+    int err = XIWarpPointer(context->display, deviceid, src_w, dest_w, src_x,
                             src_y, src_width, src_height, x, y);
-    XFlush(context.display);
+    XFlush(context->display);
 }
 
-void query(Context context, int deviceid, double *x, double *y) {
+void query(Context *context, int deviceid, double *x, double *y) {
     Window root = 0;
     Window window = 0;
 
@@ -54,13 +54,13 @@ void query(Context context, int deviceid, double *x, double *y) {
     XIModifierState modifier_state_dummy;
     XIGroupState modifier_group_dummy;
 
-    XIQueryPointer(context.display, deviceid, context.root_window, &root,
+    XIQueryPointer(context->display, deviceid, context->root_window, &root,
                    &window, x, y, &double_dummy, &double_dummy,
                    &button_state_dummy, &modifier_state_dummy,
                    &modifier_group_dummy);
 }
 
-void loop(Context context, PhysicsEnt *entities) {
+void loop(Context *context, PhysicsEnt *entities) {
     /* double fy, fx; */
     double c = 50.0;
     PhysicsEnt c1 = entities[0];
@@ -73,18 +73,18 @@ void loop(Context context, PhysicsEnt *entities) {
     while (True) {
         /* query(context, c1.id, &c1.x, &c1.y); */
         /* query(context, c2.id, &c2.x, &c2.y); */
-        for(int i=0; i<context.num_ents; ++i) {
-            query(context, context.ids[i], &xs[i], &ys[i]);
+        for (int i = 0; i < context->num_ents; ++i) {
+            query(context, context->ids[i], &xs[i], &ys[i]);
         }
 
         // calculate forces
 
-        for(int i=0; i<context.num_ents; ++i) {
+        for (int i = 0; i < context->num_ents; ++i) {
             /* double xdiff = c1.x - c2.x; */
             /* double ydiff = c1.y - c2.y; */
 
-            for(int j=0; j<context.num_ents; j++) {
-                if(i == j) {
+            for (int j = 0; j < context->num_ents; j++) {
+                if (i == j) {
                     continue;
                 }
 
@@ -97,12 +97,14 @@ void loop(Context context, PhysicsEnt *entities) {
                 double f = c * (1.0 / (pow(d, 1.5)));
                 fxs[i] += xdiff / d * f;
                 fys[i] += ydiff / d * f;
-                printf("i,j: %d,%d\nfx: %f\nfy: %f\n", i, j, entities[i].x, entities[i].y);
+                printf("i,j: %d,%d\nfx: %f\nfy: %f\n", i, j, entities[i].x,
+                       entities[i].y);
             }
         }
 
-        // TODO: missing foce calculation, this need to move into the above inner loop
-        for(int i=0; i<context.num_ents; ++i) {
+        // TODO: missing foce calculation, this need to move into the above
+        // inner loop
+        for (int i = 0; i < context->num_ents; ++i) {
             // calculate new positions
             entities[i].vx += -fxs[i];
             entities[i].vy += -fys[i];
@@ -111,18 +113,18 @@ void loop(Context context, PhysicsEnt *entities) {
             entities[i].y += entities[i].vy;
         }
 
-        for(int i=0; i<context.num_ents; ++i) {
-            if (entities[i].y >= context.height || entities[i].y <= 0) {
+        for (int i = 0; i < context->num_ents; ++i) {
+            if (entities[i].y >= context->height || entities[i].y <= 0) {
                 entities[i].vy *= -1;
             }
-            if (entities[i].x >= context.width || entities[i].x <= 0) {
+            if (entities[i].x >= context->width || entities[i].x <= 0) {
                 entities[i].vx *= -1;
             }
         }
 
         // move cursors
-        for(int i=0; i<context.num_ents; ++i) {
-            warp(context, context.ids[i], entities[i].x, entities[i].y);
+        for (int i = 0; i < context->num_ents; ++i) {
+            warp(context, context->ids[i], entities[i].x, entities[i].y);
         }
 
         // sleep
@@ -160,10 +162,6 @@ Context build_context() {
     context.root_window = root_window;
     context.width = WidthOfScreen(screen);
     context.height = HeightOfScreen(screen);
-
-    context.ids[0] = id1;
-    context.ids[1] = id2;
-    context.num_ents = 2;
 
     return context;
 }
@@ -245,13 +243,13 @@ void reset_pointers(Context *context) {
     }
 }
 
-void orbits(Context context) {
+void orbits(Context *context) {
     double x, y;
     PhysicsEnt *phys_ents = malloc(MAX_ENTITIES * sizeof(PhysicsEnt));
 
-    for(int i=0; i<context.num_ents; ++i) {
-        query(context, context.ids[i], &x, &y);
-        PhysicsEnt e = {0, 0, x, y, context.ids[i]};
+    for (int i = 0; i < context->num_ents; ++i) {
+        query(context, context->ids[i], &x, &y);
+        PhysicsEnt e = {0, 0, x, y, context->ids[i]};
         phys_ents[i] = e;
         printf("%f %f\n", x, y);
     }
@@ -259,72 +257,89 @@ void orbits(Context context) {
     loop(context, phys_ents);
 }
 
-void fling(Context context) {
+void fling(Context *context) {
     double x, y;
-    query(context, context.ids[0], &x, &y);
+    PhysicsEnt *phys_ents = malloc(MAX_ENTITIES * sizeof(PhysicsEnt));
 
-    PhysicsEnt c1 = {0, 0, x, y, context.ids[0]};
+    for (int i = 0; i < context->num_ents; ++i) {
+        query(context, context->ids[i], &x, &y);
+        PhysicsEnt e = {0, 0, x, y, context->ids[i]};
+        phys_ents[i] = e;
+        printf("%f %f\n", x, y);
+    }
 
     double c = 0.1;
 
     while (True) {
-        double newx, newy;
-        query(context, context.ids[0], &newx, &newy);
+        for (int i = 0; i < context->num_ents; ++i) {
+            double newx, newy;
+            query(context, context->ids[i], &newx, &newy);
 
-        if (abs(newx - c1.x) > 1) {
-            x = newx;
-        } else {
-            x = c1.x;
+            if (abs(newx - phys_ents[i].x) > 1) {
+                x = newx;
+            } else {
+                x = phys_ents[i].x;
+            }
+            if (abs(newy - phys_ents[i].y) > 1) {
+                y = newy;
+            } else {
+                y = phys_ents[i].y;
+            }
+
+            double xdiff = x - phys_ents[i].x;
+            double ydiff = y - phys_ents[i].y;
+
+            double limit = 0.1;
+
+            double moved = sqrt(xdiff * xdiff + ydiff * ydiff);
+
+            // if (abs(xdiff) > abs(phys_ents[i].vx)) {
+            phys_ents[i].vx += c * xdiff;
+            //}
+            // if (abs(ydiff) > abs(phys_ents[i].vy)) {
+            phys_ents[i].vy += c * ydiff;
+            //}
+
+            printf("%f %f\n", phys_ents[i].vx, phys_ents[i].vy);
+
+            phys_ents[i].x += phys_ents[i].vx;
+            phys_ents[i].y += phys_ents[i].vy;
+
+            if (phys_ents[i].y >= context->height || phys_ents[i].y <= 0) {
+                phys_ents[i].vy *= -1;
+            }
+            if (phys_ents[i].x >= context->width || phys_ents[i].x <= 0) {
+                phys_ents[i].vx *= -1;
+            }
+
+            double f = 0.9;
+
+            phys_ents[i].vx *= f;
+            phys_ents[i].vy *= f;
+
+            warp(context, context->ids[i], phys_ents[i].x, phys_ents[i].y);
         }
-        if (abs(newy - c1.y) > 1) {
-            y = newy;
-        } else {
-            y = c1.y;
-        }
-
-        double xdiff = x - c1.x;
-        double ydiff = y - c1.y;
-
-        double limit = 0.1;
-
-        double moved = sqrt(xdiff * xdiff + ydiff * ydiff);
-
-        // if (abs(xdiff) > abs(c1.vx)) {
-        c1.vx += c * xdiff;
-        //}
-        // if (abs(ydiff) > abs(c1.vy)) {
-        c1.vy += c * ydiff;
-        //}
-
-        printf("%f %f\n", c1.vx, c1.vy);
-
-        c1.x += c1.vx;
-        c1.y += c1.vy;
-
-        if (c1.y >= context.height || c1.y <= 0) {
-            c1.vy *= -1;
-        }
-        if (c1.x >= context.width || c1.x <= 0) {
-            c1.vx *= -1;
-        }
-
-        double f = 0.9;
-
-        c1.vx *= f;
-        c1.vy *= f;
-
-        warp(context, c1.id, c1.x, c1.y);
 
         usleep(16000);
     }
 }
 
+void register_pointers(Context *context) {
+    PointerConfiguration pc = get_pointer_configuration(context);
+
+    context->num_ents = pc.num_master_pointers;
+    for (int i = 0; i < pc.num_master_pointers; i++) {
+        context->ids[i] = pc.master_pointers[i];
+    }
+}
+
 int main(int argc, char **argv) {
     Context context = build_context();
+    register_pointers(&context);
 
     // reset_pointers(&context);
     // init_pointers(&context);
 
-    orbits(context);
-    // fling(context);
+    // orbits(context);
+    fling(&context);
 }
