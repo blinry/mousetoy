@@ -273,6 +273,10 @@ void loop(Context *context) {
 
     double c = 0.05;
 
+    if (context->mode == MODE_ORBIT) {
+        c = 0.02;
+    }
+
     while (True) {
         for (int i = 0; i < context->num_ents; ++i) {
             double newx, newy;
