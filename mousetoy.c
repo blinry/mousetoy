@@ -191,7 +191,6 @@ PointerConfiguration get_pointer_configuration(Context *context) {
             printf("slave %d\n", device->deviceid);
             break;
         }
-        // printf("Device is attached to/paired with %d\n", device->attachment);
     }
 
     XIFreeDeviceInfo(devices);
@@ -297,12 +296,8 @@ void loop(Context *context) {
 
             double moved = sqrt(xdiff * xdiff + ydiff * ydiff);
 
-            // if (abs(xdiff) > abs(phys_ents[i].vx)) {
             phys_ents[i].vx += c * xdiff;
-            //}
-            // if (abs(ydiff) > abs(phys_ents[i].vy)) {
             phys_ents[i].vy += c * ydiff;
-            //}
 
             phys_ents[i].x += phys_ents[i].vx;
             phys_ents[i].y += phys_ents[i].vy;
@@ -377,9 +372,6 @@ int main(int argc, char **argv) {
     Context context = build_context();
     context.mode = mode;
 
-    // reset_pointers(&context);
-    // init_pointers(&context);
     register_pointers(&context);
-
     loop(&context);
 }
