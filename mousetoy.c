@@ -6,6 +6,8 @@
 #include <stdlib.h>
 #include <unistd.h>
 
+#define MAX_ENTITIES 7
+
 typedef struct PhysicsEnt {
     double vx, vy;
     double x, y;
@@ -17,7 +19,8 @@ typedef struct Context {
     Window root_window;
     int width;
     int height;
-    int id1, id2;
+    int ids[MAX_ENTITIES];
+    int num_ents;
 } Context;
 
 typedef struct PointerConfiguration {
@@ -57,57 +60,75 @@ void query(Context context, int deviceid, double *x, double *y) {
                    &modifier_group_dummy);
 }
 
-void loop(Context context, PhysicsEnt c1, PhysicsEnt c2) {
-    double fy, fx;
+void loop(Context context, PhysicsEnt *entities) {
+    /* double fy, fx; */
     double c = 50.0;
+    PhysicsEnt c1 = entities[0];
+    PhysicsEnt c2 = entities[1];
+    double xs[MAX_ENTITIES];
+    double ys[MAX_ENTITIES];
+    double fxs[MAX_ENTITIES] = {0};
+    double fys[MAX_ENTITIES] = {0};
 
     while (True) {
-        query(context, c1.id, &c1.x, &c1.y);
-        query(context, c2.id, &c2.x, &c2.y);
+        /* query(context, c1.id, &c1.x, &c1.y); */
+        /* query(context, c2.id, &c2.x, &c2.y); */
+        for(int i=0; i<context.num_ents; ++i) {
+            query(context, context.ids[i], &xs[i], &ys[i]);
+        }
 
         // calculate forces
-        double xdiff = c1.x - c2.x;
-        double ydiff = c1.y - c2.y;
-        double d = sqrt(xdiff * xdiff + ydiff * ydiff);
-        if (d < 5) {
-            d = 5;
-        }
-        double f = c * (1.0 / (pow(d, 1.5)));
-        fx = xdiff / d * f;
-        fy = ydiff / d * f;
 
-        // calculate new positions
-        c1.vx += -fx;
-        c2.vx += fx;
-        c1.vy += -fy;
-        c2.vy += fy;
+        for(int i=0; i<context.num_ents; ++i) {
+            /* double xdiff = c1.x - c2.x; */
+            /* double ydiff = c1.y - c2.y; */
 
-        printf("%f\n", c1.y);
-        c1.x += c1.vx;
-        c2.x += c2.vx;
-        c1.y += c1.vy;
-        c2.y += c2.vy;
+            for(int j=0; j<context.num_ents; j++) {
+                if(i == j) {
+                    continue;
+                }
 
-        if (c1.y >= context.height || c1.y <= 0) {
-            c1.vy *= -1;
-        }
-        if (c1.x >= context.width || c1.x <= 0) {
-            c1.vx *= -1;
-        }
-        if (c2.y >= context.height || c2.y <= 0) {
-            c2.vy *= -1;
-        }
-        if (c2.x >= context.width || c2.x <= 0) {
-            c2.vx *= -1;
+                double xdiff = xs[i] - xs[j];
+                double ydiff = ys[i] - ys[j];
+                double d = sqrt(xdiff * xdiff + ydiff * ydiff);
+                if (d < 5) {
+                    d = 5;
+                }
+                double f = c * (1.0 / (pow(d, 1.5)));
+                fxs[i] += xdiff / d * f;
+                fys[i] += ydiff / d * f;
+                printf("i,j: %d,%d\nfx: %f\nfy: %f\n", i, j, entities[i].x, entities[i].y);
+            }
         }
 
-        // move pointers
-        warp(context, c1.id, c1.x, c1.y);
-        warp(context, c2.id, c2.x, c2.y);
+        // TODO: missing foce calculation, this need to move into the above inner loop
+        for(int i=0; i<context.num_ents; ++i) {
+            // calculate new positions
+            entities[i].vx += -fxs[i];
+            entities[i].vy += -fys[i];
+
+            entities[i].x += entities[i].vx;
+            entities[i].y += entities[i].vy;
+        }
+
+        for(int i=0; i<context.num_ents; ++i) {
+            if (entities[i].y >= context.height || entities[i].y <= 0) {
+                entities[i].vy *= -1;
+            }
+            if (entities[i].x >= context.width || entities[i].x <= 0) {
+                entities[i].vx *= -1;
+            }
+        }
+
+        // move cursors
+        for(int i=0; i<context.num_ents; ++i) {
+            warp(context, context.ids[i], entities[i].x, entities[i].y);
+        }
 
         // sleep
         usleep(30000);
     }
+    free(entities);
 }
 
 Context build_context() {
@@ -139,8 +160,10 @@ Context build_context() {
     context.root_window = root_window;
     context.width = WidthOfScreen(screen);
     context.height = HeightOfScreen(screen);
-    // context.id1 = id1;
-    // context.id2 = id2;
+
+    context.ids[0] = id1;
+    context.ids[1] = id2;
+    context.num_ents = 2;
 
     return context;
 }
@@ -224,29 +247,29 @@ void reset_pointers(Context *context) {
 
 void orbits(Context context) {
     double x, y;
+    PhysicsEnt *phys_ents = malloc(MAX_ENTITIES * sizeof(PhysicsEnt));
 
-    query(context, context.id1, &x, &y);
-    PhysicsEnt c1 = {0, 0, x, y, context.id1};
+    for(int i=0; i<context.num_ents; ++i) {
+        query(context, context.ids[i], &x, &y);
+        PhysicsEnt e = {0, 0, x, y, context.ids[i]};
+        phys_ents[i] = e;
+        printf("%f %f\n", x, y);
+    }
 
-    query(context, context.id2, &x, &y);
-    PhysicsEnt c2 = {0, 0, x, y, context.id2};
-
-    printf("%f %f\n", x, y);
-
-    loop(context, c1, c2);
+    loop(context, phys_ents);
 }
 
 void fling(Context context) {
     double x, y;
-    query(context, context.id1, &x, &y);
+    query(context, context.ids[0], &x, &y);
 
-    PhysicsEnt c1 = {0, 0, x, y, context.id1};
+    PhysicsEnt c1 = {0, 0, x, y, context.ids[0]};
 
     double c = 0.1;
 
     while (True) {
         double newx, newy;
-        query(context, context.id1, &newx, &newy);
+        query(context, context.ids[0], &newx, &newy);
 
         if (abs(newx - c1.x) > 1) {
             x = newx;
@@ -302,6 +325,6 @@ int main(int argc, char **argv) {
     // reset_pointers(&context);
     // init_pointers(&context);
 
-    // orbits(context);
+    orbits(context);
     // fling(context);
 }
