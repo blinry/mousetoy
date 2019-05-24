@@ -20,6 +20,14 @@ typedef struct Context {
     int id1, id2;
 } Context;
 
+typedef struct PointerConfiguration {
+    int master_pointers[8];
+    int num_master_pointers;
+
+    int slave_pointers[128];
+    int num_slave_pointers;
+} PointerConfiguration;
+
 void warp(Context context, int deviceid, double x, double y) {
     double src_x = 0;
     double src_y = 0;
@@ -93,7 +101,7 @@ void loop(Context context, PhysicsEnt c1, PhysicsEnt c2) {
             c2.vx *= -1;
         }
 
-        // move cursors
+        // move pointers
         warp(context, c1.id, c1.x, c1.y);
         warp(context, c2.id, c2.x, c2.y);
 
@@ -111,47 +119,6 @@ Context build_context() {
     Window root_window = RootWindow(display, screen_id);
 
     Screen *screen = ScreenOfDisplay(display, screen_id);
-
-    // Find the master pointer devices.
-    int id1, id2;
-
-    int ndevices;
-    XIDeviceInfo *devices =
-        XIQueryDevice(display, XIAllMasterDevices, &ndevices);
-
-    for (int i = 0; i < ndevices; i++) {
-        XIDeviceInfo *device = &devices[i];
-        printf("Device %s (id: %d) is a ", device->name, device->deviceid);
-
-        switch (device->use) {
-        case XIMasterPointer:
-            printf("master pointer\n");
-
-            if (i == 0) {
-                id1 = device->deviceid;
-            } else {
-                id2 = device->deviceid;
-            }
-
-            break;
-        case XIMasterKeyboard:
-            printf("master keyboard\n");
-            break;
-            // case XISlavePointer:
-            //    printf("slave pointer\n");
-            //    break;
-            // case XISlaveKeyboard:
-            //    printf("slave keyboard\n");
-            //    break;
-            // case XIFloatingSlave:
-            //    printf("floating slave\n");
-            //    break;
-        }
-
-        // printf("Device is attached to/paired with %d\n", device->attachment);
-    }
-
-    XIFreeDeviceInfo(devices);
 
     //// Set up event listener.
     // XIEventMask eventmask;
@@ -172,10 +139,87 @@ Context build_context() {
     context.root_window = root_window;
     context.width = WidthOfScreen(screen);
     context.height = HeightOfScreen(screen);
-    context.id1 = id1;
-    context.id2 = id2;
+    // context.id1 = id1;
+    // context.id2 = id2;
 
     return context;
+}
+
+PointerConfiguration get_pointer_configuration(Context *context) {
+    PointerConfiguration pc = {0};
+
+    int ndevices;
+    XIDeviceInfo *devices =
+        XIQueryDevice(context->display, XIAllDevices, &ndevices);
+
+    for (int i = 0; i < ndevices; i++) {
+        XIDeviceInfo *device = &devices[i];
+        switch (device->use) {
+        case XIMasterPointer:
+            pc.master_pointers[pc.num_master_pointers] = device->deviceid;
+            pc.num_master_pointers++;
+            printf("master %d\n", device->deviceid);
+            break;
+        case XISlavePointer:
+        case XIFloatingSlave:
+            pc.slave_pointers[pc.num_slave_pointers] = device->deviceid;
+            pc.num_slave_pointers++;
+            printf("slave %d\n", device->deviceid);
+            break;
+        }
+        // printf("Device is attached to/paired with %d\n", device->attachment);
+    }
+
+    XIFreeDeviceInfo(devices);
+
+    return pc;
+}
+
+void init_pointers(Context *context) {
+    PointerConfiguration pc = get_pointer_configuration(context);
+
+    for (int i = 1; i < pc.num_slave_pointers; i++) {
+        printf("creating new master\n");
+
+        XIAddMasterInfo add;
+        add.type = XIAddMaster;
+        add.name = "mousetoy";
+        add.send_core = True;
+        add.enable = True;
+
+        int ret = XIChangeHierarchy(context->display, &add, 1);
+        printf("return %d\n", ret);
+    }
+
+    pc = get_pointer_configuration(context);
+
+    for (int i = 1; i < pc.num_slave_pointers; i++) {
+        XIAttachSlaveInfo attach;
+        attach.type = XIAttachSlave;
+        attach.deviceid = pc.slave_pointers[i];
+        attach.new_master = pc.master_pointers[i];
+
+        int ret = XIChangeHierarchy(context->display, &attach, 1);
+        printf("return %d\n", ret);
+    }
+}
+
+void reset_pointers(Context *context) {
+    PointerConfiguration pc = get_pointer_configuration(context);
+    for (int i = 1; i < pc.num_master_pointers; i++) {
+        printf("deleting %d\n", pc.master_pointers[i]);
+        XIRemoveMasterInfo remove;
+        remove.type = XIRemoveMaster;
+        remove.deviceid = pc.master_pointers[i];
+        remove.return_mode = XIAttachToMaster;
+        remove.return_pointer = pc.master_pointers[0];
+        remove.return_keyboard = 3; // FIXME: Our new master devices *should*
+                                    // not have any keyboard slaves...
+
+        int ret = XIChangeHierarchy(context->display,
+                                    (XIAnyHierarchyChangeInfo *)&remove, 1);
+        printf("return %d\n", ret);
+    }
 }
 
 void orbits(Context context) {
@@ -255,6 +299,9 @@ void fling(Context context) {
 int main(int argc, char **argv) {
     Context context = build_context();
 
-    orbits(context);
+    // reset_pointers(&context);
+    // init_pointers(&context);
+
+    // orbits(context);
     // fling(context);
 }
