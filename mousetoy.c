@@ -8,6 +8,8 @@
 
 #define MAX_ENTITIES 7
 
+typedef enum Mode { MODE_ORBIT, MODE_PUSH } Mode;
+
 typedef struct PhysicsEnt {
     double vx, vy;
     double x, y;
@@ -15,6 +17,7 @@ typedef struct PhysicsEnt {
 } PhysicsEnt;
 
 typedef struct Context {
+    Mode mode;
     Display *display;
     Window root_window;
     int width;
@@ -60,7 +63,7 @@ void query(Context *context, int deviceid, double *x, double *y) {
                    &modifier_group_dummy);
 }
 
-void loop(Context *context, PhysicsEnt *entities) {
+void orbit_loop(Context *context, PhysicsEnt *entities) {
     /* double fy, fx; */
     double c = 50.0;
     PhysicsEnt c1 = entities[0];
@@ -208,7 +211,8 @@ void init_pointers(Context *context) {
         add.send_core = True;
         add.enable = True;
 
-        int ret = XIChangeHierarchy(context->display, &add, 1);
+        int ret = XIChangeHierarchy(context->display,
+                                    (XIAnyHierarchyChangeInfo *)&add, 1);
         printf("return %d\n", ret);
     }
 
@@ -220,7 +224,8 @@ void init_pointers(Context *context) {
         attach.deviceid = pc.slave_pointers[i];
         attach.new_master = pc.master_pointers[i];
 
-        int ret = XIChangeHierarchy(context->display, &attach, 1);
+        int ret = XIChangeHierarchy(context->display,
+                                    (XIAnyHierarchyChangeInfo *)&attach, 1);
         printf("return %d\n", ret);
     }
 }
@@ -254,10 +259,10 @@ void orbits(Context *context) {
         printf("%f %f\n", x, y);
     }
 
-    loop(context, phys_ents);
+    orbit_loop(context, phys_ents);
 }
 
-void fling(Context *context) {
+void loop(Context *context) {
     double x, y;
     PhysicsEnt *phys_ents = malloc(MAX_ENTITIES * sizeof(PhysicsEnt));
 
@@ -265,10 +270,9 @@ void fling(Context *context) {
         query(context, context->ids[i], &x, &y);
         PhysicsEnt e = {0, 0, x, y, context->ids[i]};
         phys_ents[i] = e;
-        printf("%f %f\n", x, y);
     }
 
-    double c = 0.1;
+    double c = 0.05;
 
     while (True) {
         for (int i = 0; i < context->num_ents; ++i) {
@@ -300,8 +304,6 @@ void fling(Context *context) {
             phys_ents[i].vy += c * ydiff;
             //}
 
-            printf("%f %f\n", phys_ents[i].vx, phys_ents[i].vy);
-
             phys_ents[i].x += phys_ents[i].vx;
             phys_ents[i].y += phys_ents[i].vy;
 
@@ -312,7 +314,40 @@ void fling(Context *context) {
                 phys_ents[i].vx *= -1;
             }
 
+            for (int j = 0; j < context->num_ents; ++j) {
+                if (i == j) {
+                    continue;
+                }
+
+                double xdiff = phys_ents[i].x - phys_ents[j].x;
+                double ydiff = phys_ents[i].y - phys_ents[j].y;
+                double d = sqrt(xdiff * xdiff + ydiff * ydiff);
+
+                if (context->mode == MODE_ORBIT) {
+                    double c2 = 0.1;
+
+                    phys_ents[i].vx -= c2 * xdiff / d;
+                    phys_ents[i].vy -= c2 * ydiff / d;
+
+                    phys_ents[j].vx += c2 * xdiff / d;
+                    phys_ents[j].vy += c2 * ydiff / d;
+                } else if (context->mode == MODE_PUSH) {
+                    double c2 = 0.01;
+
+                    if (d < 100) {
+                        phys_ents[i].vx += c2 * xdiff;
+                        phys_ents[i].vy += c2 * ydiff;
+
+                        phys_ents[j].vx -= c2 * xdiff;
+                        phys_ents[j].vy -= c2 * ydiff;
+                    }
+                }
+            }
+
             double f = 0.9;
+            if (context->mode == MODE_ORBIT) {
+                f = 0.99;
+            }
 
             phys_ents[i].vx *= f;
             phys_ents[i].vy *= f;
@@ -334,12 +369,17 @@ void register_pointers(Context *context) {
 }
 
 int main(int argc, char **argv) {
+    Mode mode = MODE_PUSH;
+    if (argc > 1) {
+        mode = atoi(argv[1]);
+    }
+
     Context context = build_context();
-    register_pointers(&context);
+    context.mode = mode;
 
     // reset_pointers(&context);
     // init_pointers(&context);
+    register_pointers(&context);
 
-    // orbits(context);
-    fling(&context);
+    loop(&context);
 }
