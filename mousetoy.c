@@ -21,7 +21,6 @@ typedef struct Context {
 } Context;
 
 void warp(Context context, int deviceid, double x, double y) {
-
     double src_x = 0;
     double src_y = 0;
     int src_width = 0;
@@ -103,7 +102,7 @@ void loop(Context context, PhysicsEnt c1, PhysicsEnt c2) {
     }
 }
 
-Context build_context(int id1, int id2) {
+Context build_context() {
     char *env_display = getenv("DISPLAY");
     Display *display = XOpenDisplay(env_display);
 
@@ -112,6 +111,61 @@ Context build_context(int id1, int id2) {
     Window root_window = RootWindow(display, screen_id);
 
     Screen *screen = ScreenOfDisplay(display, screen_id);
+
+    // Find the master pointer devices.
+    int id1, id2;
+
+    int ndevices;
+    XIDeviceInfo *devices =
+        XIQueryDevice(display, XIAllMasterDevices, &ndevices);
+
+    for (int i = 0; i < ndevices; i++) {
+        XIDeviceInfo *device = &devices[i];
+        printf("Device %s (id: %d) is a ", device->name, device->deviceid);
+
+        switch (device->use) {
+        case XIMasterPointer:
+            printf("master pointer\n");
+
+            if (i == 0) {
+                id1 = device->deviceid;
+            } else {
+                id2 = device->deviceid;
+            }
+
+            break;
+        case XIMasterKeyboard:
+            printf("master keyboard\n");
+            break;
+            // case XISlavePointer:
+            //    printf("slave pointer\n");
+            //    break;
+            // case XISlaveKeyboard:
+            //    printf("slave keyboard\n");
+            //    break;
+            // case XIFloatingSlave:
+            //    printf("floating slave\n");
+            //    break;
+        }
+
+        // printf("Device is attached to/paired with %d\n", device->attachment);
+    }
+
+    XIFreeDeviceInfo(devices);
+
+    //// Set up event listener.
+    // XIEventMask eventmask;
+    // unsigned char mask[1] = {0};
+
+    // eventmask.deviceid = XIAllMasterDevices;
+    // eventmask.mask_len = sizeof(mask);
+    // eventmask.mask = mask;
+    // XISetMask(mask, XI_ButtonPress);
+    // XISetMask(mask, XI_Motion);
+    //// XISetMask(mask, XI_KeyPress);
+
+    /* select on the window */
+    // XISelectEvents(display, window, &eventmask, 1);
 
     Context context;
     context.display = display;
@@ -199,12 +253,8 @@ void fling(Context context) {
 }
 
 int main(int argc, char **argv) {
-    if(argc != 3) {
-        puts("Wrong number of inputs!");
-        return EXIT_FAILURE;
-    }
-    Context context = build_context(atoi(argv[1]), atoi(argv[2]));
+    Context context = build_context();
 
-    // orbits(context);
-    fling(context);
+    orbits(context);
+    // fling(context);
 }
