@@ -6,6 +6,8 @@
 #include <stdlib.h>
 #include <unistd.h>
 
+#define MAX_ENTITIES 7
+
 typedef struct PhysicsEnt {
     double vx, vy;
     double x, y;
@@ -17,7 +19,7 @@ typedef struct Context {
     Window root_window;
     int width;
     int height;
-    int id1, id2;
+    int ids[MAX_ENTITIES];
 } Context;
 
 void warp(Context context, int deviceid, double x, double y) {
@@ -49,9 +51,11 @@ void query(Context context, int deviceid, double *x, double *y) {
                    &modifier_group_dummy);
 }
 
-void loop(Context context, PhysicsEnt c1, PhysicsEnt c2) {
+void loop(Context context, PhysicsEnt *entities) {
     double fy, fx;
     double c = 50.0;
+    PhysicsEnt c1 = entities[0];
+    PhysicsEnt c2 = entities[1];
 
     while (True) {
         query(context, c1.id, &c1.x, &c1.y);
@@ -100,6 +104,7 @@ void loop(Context context, PhysicsEnt c1, PhysicsEnt c2) {
         // sleep
         usleep(30000);
     }
+    free(entities);
 }
 
 Context build_context() {
@@ -172,8 +177,8 @@ Context build_context() {
     context.root_window = root_window;
     context.width = WidthOfScreen(screen);
     context.height = HeightOfScreen(screen);
-    context.id1 = id1;
-    context.id2 = id2;
+    context.ids[0] = id1;
+    context.ids[1] = id2;
 
     return context;
 }
@@ -181,28 +186,33 @@ Context build_context() {
 void orbits(Context context) {
     double x, y;
 
-    query(context, context.id1, &x, &y);
-    PhysicsEnt c1 = {0, 0, x, y, context.id1};
+    query(context, context.ids[0], &x, &y);
+    PhysicsEnt c1 = {0, 0, x, y, context.ids[0]};
 
-    query(context, context.id2, &x, &y);
-    PhysicsEnt c2 = {0, 0, x, y, context.id2};
+    query(context, context.ids[1], &x, &y);
+    PhysicsEnt c2 = {0, 0, x, y, context.ids[1]};
 
     printf("%f %f\n", x, y);
 
-    loop(context, c1, c2);
+
+    PhysicsEnt *phys_ents = malloc(MAX_ENTITIES * sizeof(PhysicsEnt));
+    /* PhysicsEnt ps[2] = {c1, c2}; */
+    phys_ents[0] = c1;
+    phys_ents[1] = c2;
+    loop(context, phys_ents);
 }
 
 void fling(Context context) {
     double x, y;
-    query(context, context.id1, &x, &y);
+    query(context, context.ids[0], &x, &y);
 
-    PhysicsEnt c1 = {0, 0, x, y, context.id1};
+    PhysicsEnt c1 = {0, 0, x, y, context.ids[0]};
 
     double c = 0.1;
 
     while (True) {
         double newx, newy;
-        query(context, context.id1, &newx, &newy);
+        query(context, context.ids[0], &newx, &newy);
 
         if (abs(newx - c1.x) > 1) {
             x = newx;
@@ -256,5 +266,5 @@ int main(int argc, char **argv) {
     Context context = build_context();
 
     orbits(context);
-    // fling(context);
+    /* fling(context); */
 }
