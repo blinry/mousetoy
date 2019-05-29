@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <X11/extensions/XInput.h>
 
 #define MAX_ENTITIES 7
 
@@ -367,14 +368,51 @@ void register_pointers(Context *context) {
     }
 }
 
+void setup_pointers(Context ctx) {
+    XIDeviceInfo *info;
+    int ndevices;
+
+    info = XIQueryDevice(ctx.display, XIAllDevices, &ndevices);
+    for(int i=0; i<ndevices; i++) {
+        printf("%i: ");
+
+        // using code from xlib
+        switch (info->use) {
+        case IsXPointer:
+            printf("XPointer");
+            break;
+        case IsXKeyboard:
+            printf("XKeyboard");
+            break;
+        case IsXExtensionDevice:
+            printf("XExtensionDevice");
+            break;
+        case IsXExtensionKeyboard:
+            printf("XExtensionKeyboard");
+            break;
+        case IsXExtensionPointer:
+            printf("XExtensionPointer");
+            break;
+        default:
+            printf("Unknown class");
+            break;
+        }
+        printf("\n");
+        info += 1;
+    }
+}
+
 int main(int argc, char **argv) {
     Mode mode = MODE_PUSH;
     if (argc > 1) {
         mode = atoi(argv[1]);
     }
 
+
     Context context = build_context();
     context.mode = mode;
+
+    setup_pointers(context);
 
     register_pointers(&context);
     loop(&context);
