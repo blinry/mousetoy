@@ -11,7 +11,7 @@
 
 #define MAX_ENTITIES 7
 
-typedef enum Mode { MODE_RESET, MODE_SETUP, MODE_PUSH, MODE_ORBIT } Mode;
+typedef enum Mode { MODE_RESET, MODE_SETUP, MODE_PUSH, MODE_ORBIT, MODE_TAG } Mode;
 
 typedef struct PhysicsEnt {
     double vx, vy;
@@ -27,6 +27,8 @@ typedef struct Context {
     int height;
     int ids[MAX_ENTITIES];
     int num_ents;
+    int it_id; // only valid if mode == MODE_TAG
+    unsigned long int frame;
 } Context;
 
 typedef struct PointerConfiguration {
@@ -65,54 +67,49 @@ void query(Context *context, int deviceid, double *x, double *y) {
                    &button_state_dummy, &modifier_state_dummy,
                    &modifier_group_dummy);
     if(window) {
-        puts("updating cursor img");
-
-        unsigned int shape;
-        if(deviceid == 2) {
-            shape = XcursorLibraryShape("left_ptr");
-            puts("1\n");
-        }
-        else {
-            shape = XcursorLibraryShape("crosshair");
-            puts("2\n");
-        }
-
-        if (shape < 0) {
-            puts("failed to get shape\n");
-        }
-
-        int size = XcursorGetDefaultSize(context->display);
-        if (size == 0) {
-            puts("fialed to get cursor size");
-        }
-
-        char *theme = XcursorGetTheme(context->display);
-        if (theme == NULL) {
-            puts("can't get cursor theme");
-        }
-
-        XcursorImage *image = XcursorShapeLoadImage(shape, theme, size);
-        if (image == NULL) {
-            puts("can't get cursor image\n");
-        }
-
-        Cursor cursor = XcursorImageLoadCursor(context->display, image);
-
-        /* Window root_return; */
-        /* Window parent_return; */
-        /* Window *children; */
-        /* unsigned int n_children; */
-        /* XQueryTree(context->display, context->root_window, &root_return, &parent_return, &children, &n_children); */
-        /* for(int i=0; i<n_children; i++) { */
-        /*     puts("window loop"); */
-        /*     int ret = XUndefineCursor(context->display, children[i]); */
-        /*     printf(" ret = %d ", ret); */
-        /*     /1* XIDefineCursor(context->display, deviceid, children[i], cursor); *1/ */
-        /* } */
-        XIDefineCursor(context->display, deviceid, context->root_window, cursor);
-        XFlush(context->display);
         /* XFree(children); */
     }
+}
+
+int change_cursor(Context *context, char *img_name, int deviceid) {
+    unsigned int shape;
+    shape = XcursorLibraryShape(img_name);
+
+    if (shape < 0) {
+        puts("failed to get shape\n");
+    }
+
+    int size = XcursorGetDefaultSize(context->display);
+    if (size == 0) {
+        puts("fialed to get cursor size");
+    }
+
+    char *theme = XcursorGetTheme(context->display);
+    if (theme == NULL) {
+        puts("can't get cursor theme");
+    }
+
+    XcursorImage *image = XcursorShapeLoadImage(shape, theme, size);
+    if (image == NULL) {
+        puts("can't get cursor image\n");
+    }
+
+    Cursor cursor = XcursorImageLoadCursor(context->display, image);
+
+    /* Window root_return; */
+    /* Window parent_return; */
+    /* Window *children; */
+    /* unsigned int n_children; */
+    /* XQueryTree(context->display, context->root_window, &root_return, &parent_return, &children, &n_children); */
+    /* for(int i=0; i<n_children; i++) { */
+    /*     puts("window loop"); */
+    /*     int ret = XUndefineCursor(context->display, children[i]); */
+    /*     printf(" ret = %d ", ret); */
+    /*     /1* XIDefineCursor(context->display, deviceid, children[i], cursor); *1/ */
+    /* } */
+    XIDefineCursor(context->display, deviceid, context->root_window, cursor);
+    XFlush(context->display);
+    return 0;
 }
 
 void orbit_loop(Context *context, PhysicsEnt *entities) {
@@ -217,6 +214,7 @@ Context build_context() {
     context.root_window = root_window;
     context.width = WidthOfScreen(screen);
     context.height = HeightOfScreen(screen);
+    context.frame = 0;
 
     return context;
 }
@@ -327,6 +325,7 @@ void loop(Context *context) {
     }
 
     while (True) {
+        context->frame += 1;
         for (int i = 0; i < context->num_ents; ++i) {
             double newx, newy;
             query(context, context->ids[i], &newx, &newy);
@@ -389,6 +388,16 @@ void loop(Context *context) {
                         phys_ents[j].vx -= c2 * xdiff;
                         phys_ents[j].vy -= c2 * ydiff;
                     }
+                } else if (context->mode == MODE_TAG) {
+                    if (context->ids[i] == context->it_id) {
+                        if (d < 50 && context->frame > 62) {
+                            context->frame = 0;
+                            puts("switch");
+                            context->it_id = context->ids[j];
+                            change_cursor(context, "crosshair", context->ids[j]);
+                            change_cursor(context, "right_ptr", context->ids[i]);
+                        }
+                    }
                 }
             }
 
@@ -414,6 +423,7 @@ void register_pointers(Context *context) {
     for (int i = 0; i < pc.num_master_pointers; i++) {
         context->ids[i] = pc.master_pointers[i];
     }
+    context->it_id = context->ids[0];
 }
 
 int main(int argc, char **argv) {
