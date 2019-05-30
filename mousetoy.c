@@ -1,15 +1,16 @@
 #include <X11/X.h>
 #include <X11/Xlib.h>
+#include <X11/extensions/XInput.h>
 #include <X11/extensions/XInput2.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
-#include <X11/extensions/XInput.h>
 
 #define MAX_ENTITIES 7
 
-typedef enum Mode { MODE_ORBIT, MODE_PUSH } Mode;
+typedef enum Mode { MODE_RESET, MODE_SETUP, MODE_PUSH, MODE_ORBIT } Mode;
 
 typedef struct PhysicsEnt {
     double vx, vy;
@@ -183,13 +184,13 @@ PointerConfiguration get_pointer_configuration(Context *context) {
         case XIMasterPointer:
             pc.master_pointers[pc.num_master_pointers] = device->deviceid;
             pc.num_master_pointers++;
-            printf("master %d\n", device->deviceid);
             break;
         case XISlavePointer:
         case XIFloatingSlave:
-            pc.slave_pointers[pc.num_slave_pointers] = device->deviceid;
-            pc.num_slave_pointers++;
-            printf("slave %d\n", device->deviceid);
+            if (!strstr(device->name, "XTEST")) {
+                pc.slave_pointers[pc.num_slave_pointers] = device->deviceid;
+                pc.num_slave_pointers++;
+            }
             break;
         }
     }
@@ -203,7 +204,6 @@ void init_pointers(Context *context) {
     PointerConfiguration pc = get_pointer_configuration(context);
 
     for (int i = 1; i < pc.num_slave_pointers; i++) {
-        printf("creating new master\n");
 
         XIAddMasterInfo add;
         add.type = XIAddMaster;
@@ -213,7 +213,6 @@ void init_pointers(Context *context) {
 
         int ret = XIChangeHierarchy(context->display,
                                     (XIAnyHierarchyChangeInfo *)&add, 1);
-        printf("return %d\n", ret);
     }
 
     pc = get_pointer_configuration(context);
@@ -226,26 +225,25 @@ void init_pointers(Context *context) {
 
         int ret = XIChangeHierarchy(context->display,
                                     (XIAnyHierarchyChangeInfo *)&attach, 1);
-        printf("return %d\n", ret);
     }
+    XFlush(context->display);
 }
 
 void reset_pointers(Context *context) {
     PointerConfiguration pc = get_pointer_configuration(context);
     for (int i = 1; i < pc.num_master_pointers; i++) {
-        printf("deleting %d\n", pc.master_pointers[i]);
         XIRemoveMasterInfo remove;
         remove.type = XIRemoveMaster;
         remove.deviceid = pc.master_pointers[i];
         remove.return_mode = XIAttachToMaster;
         remove.return_pointer = pc.master_pointers[0];
-        remove.return_keyboard = 3; // FIXME: Our new master devices *should*
-                                    // not have any keyboard slaves...
+        remove.return_keyboard =
+            3; // FIXME: Make sure this device id actually exists.
 
         int ret = XIChangeHierarchy(context->display,
                                     (XIAnyHierarchyChangeInfo *)&remove, 1);
-        printf("return %d\n", ret);
     }
+    XFlush(context->display);
 }
 
 void orbits(Context *context) {
@@ -373,7 +371,7 @@ void setup_pointers(Context ctx) {
     int ndevices;
 
     info = XIQueryDevice(ctx.display, XIAllDevices, &ndevices);
-    for(int i=0; i<ndevices; i++) {
+    for (int i = 0; i < ndevices; i++) {
         printf("%i: ");
 
         // using code from xlib
@@ -408,12 +406,20 @@ int main(int argc, char **argv) {
         mode = atoi(argv[1]);
     }
 
-
     Context context = build_context();
     context.mode = mode;
 
-    setup_pointers(context);
+    if (mode == MODE_RESET) {
+        reset_pointers(&context);
+        exit(0);
+    }
+
+    if (mode == MODE_SETUP) {
+        init_pointers(&context);
+        exit(0);
+    }
 
     register_pointers(&context);
+
     loop(&context);
 }
