@@ -2,6 +2,7 @@
 #include <X11/Xlib.h>
 #include <X11/extensions/XInput.h>
 #include <X11/extensions/XInput2.h>
+#include <X11/Xcursor/Xcursor.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -63,6 +64,55 @@ void query(Context *context, int deviceid, double *x, double *y) {
                    &window, x, y, &double_dummy, &double_dummy,
                    &button_state_dummy, &modifier_state_dummy,
                    &modifier_group_dummy);
+    if(window) {
+        puts("updating cursor img");
+
+        unsigned int shape;
+        if(deviceid == 2) {
+            shape = XcursorLibraryShape("left_ptr");
+            puts("1\n");
+        }
+        else {
+            shape = XcursorLibraryShape("crosshair");
+            puts("2\n");
+        }
+
+        if (shape < 0) {
+            puts("failed to get shape\n");
+        }
+
+        int size = XcursorGetDefaultSize(context->display);
+        if (size == 0) {
+            puts("fialed to get cursor size");
+        }
+
+        char *theme = XcursorGetTheme(context->display);
+        if (theme == NULL) {
+            puts("can't get cursor theme");
+        }
+
+        XcursorImage *image = XcursorShapeLoadImage(shape, theme, size);
+        if (image == NULL) {
+            puts("can't get cursor image\n");
+        }
+
+        Cursor cursor = XcursorImageLoadCursor(context->display, image);
+
+        /* Window root_return; */
+        /* Window parent_return; */
+        /* Window *children; */
+        /* unsigned int n_children; */
+        /* XQueryTree(context->display, context->root_window, &root_return, &parent_return, &children, &n_children); */
+        /* for(int i=0; i<n_children; i++) { */
+        /*     puts("window loop"); */
+        /*     int ret = XUndefineCursor(context->display, children[i]); */
+        /*     printf(" ret = %d ", ret); */
+        /*     /1* XIDefineCursor(context->display, deviceid, children[i], cursor); *1/ */
+        /* } */
+        XIDefineCursor(context->display, deviceid, context->root_window, cursor);
+        XFlush(context->display);
+        /* XFree(children); */
+    }
 }
 
 void orbit_loop(Context *context, PhysicsEnt *entities) {
@@ -363,40 +413,6 @@ void register_pointers(Context *context) {
     context->num_ents = pc.num_master_pointers;
     for (int i = 0; i < pc.num_master_pointers; i++) {
         context->ids[i] = pc.master_pointers[i];
-    }
-}
-
-void setup_pointers(Context ctx) {
-    XIDeviceInfo *info;
-    int ndevices;
-
-    info = XIQueryDevice(ctx.display, XIAllDevices, &ndevices);
-    for (int i = 0; i < ndevices; i++) {
-        printf("%i: ");
-
-        // using code from xlib
-        switch (info->use) {
-        case IsXPointer:
-            printf("XPointer");
-            break;
-        case IsXKeyboard:
-            printf("XKeyboard");
-            break;
-        case IsXExtensionDevice:
-            printf("XExtensionDevice");
-            break;
-        case IsXExtensionKeyboard:
-            printf("XExtensionKeyboard");
-            break;
-        case IsXExtensionPointer:
-            printf("XExtensionPointer");
-            break;
-        default:
-            printf("Unknown class");
-            break;
-        }
-        printf("\n");
-        info += 1;
     }
 }
 
